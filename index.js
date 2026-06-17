@@ -192,7 +192,21 @@ const updateCatalogue = async ({ catalogueJsonPath, readmeMdPath, date, abstract
 	console.log('更新 README.md 完成');
 }
 
+const hasExistingTranscript = () => {
+	const existingFiles = [NEWS_MD_PATH, NEWS_JSON_PATH].filter(fileExists);
+	if (existingFiles.length > 0) {
+		console.log(`检测到当天稿件已存在, 跳过抓取: ${existingFiles.join(', ')}`);
+		return true;
+	}
+	return false;
+}
+
 const main = async () => {
+	if (hasExistingTranscript()) {
+		console.log('全部成功, 程序结束');
+		return;
+	}
+
 	const newsList = await getNewsList(DATE);
 	const abstract = await getAbstract(newsList.abstract);
 	const news = await getNews(newsList.news);
