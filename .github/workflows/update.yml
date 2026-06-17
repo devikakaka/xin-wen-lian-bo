@@ -16,6 +16,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+      - id: target_date
+        run: |
+          if [ -n "${{ github.event.inputs.date || '' }}" ]; then
+            echo "date=${{ github.event.inputs.date }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "date=$(TZ=Asia/Shanghai date +%Y%m%d)" >> "$GITHUB_OUTPUT"
+          fi
+      - id: existing_transcript
+        run: |
+          target_date="${{ steps.target_date.outputs.date }}"
+          json_path="news/${target_date}.json"
+          md_path="news/${target_date}.md"
+          if [ -f "$json_path" ]; then
+            echo "skip_scrape=true" >> "$GITHUB_OUTPUT"
+            echo "transcript_path=$json_path" >> "$GITHUB_OUTPUT"
+            echo "Found existing transcript JSON: $json_path"
+          elif [ -f "$md_path" ]; then
+            echo "skip_scrape=true" >> "$GITHUB_OUTPUT"
+            echo "transcript_path=$md_path" >> "$GITHUB_OUTPUT"
+            echo "Found existing transcript markdown: $md_path"
+          else
+            echo "skip_scrape=false" >> "$GITHUB_OUTPUT"
+            echo "transcript_path=$json_path" >> "$GITHUB_OUTPUT"
+            echo "No existing transcript found for $target_date; scraper will run."
+          fi
       - uses: actions/setup-node@v3
         with:
           node-version: 16
@@ -26,13 +51,16 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: pip install -r requirements.txt
       - run: cp config/config.example.yaml config/config.yaml
-      - run: npm run index
+      - name: Scrape transcript
+        if: steps.existing_transcript.outputs.skip_scrape != 'true'
+        run: npm run index
         env:
-          NEWS_DATE: ${{ github.event.inputs.date || '' }}
-      - run: python -m src.main
+          NEWS_DATE: ${{ steps.target_date.outputs.date }}
+      - run: python -m src.main --date ${{ steps.target_date.outputs.date }} --input-json ${{ steps.existing_transcript.outputs.transcript_path }}
         env:
-          NEWS_DATE: ${{ github.event.inputs.date || '' }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          NEWS_DATE: ${{ steps.target_date.outputs.date }}
+          OPENAI_API_KEY: ${{ secrets.AI_API_KEY }}
+          AI_API_KEY: ${{ secrets.AI_API_KEY }}
           FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
           FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
           FEISHU_WIKI_SPACE_ID: ${{ secrets.FEISHU_WIKI_SPACE_ID }}

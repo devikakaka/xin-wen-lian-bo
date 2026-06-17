@@ -10,6 +10,8 @@
 4. 保存分析 Markdown 到 `analysis/`
 5. 上传分析结果到飞书知识库
 
+如果 workflow 检测到当天 `news/YYYYMMDD.json` 或 `news/YYYYMMDD.md` 已存在，会跳过抓取，直接进入 AI 分析和飞书上传。
+
 ## 分析与飞书配置
 
 首次使用前需要：

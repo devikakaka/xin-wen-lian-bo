@@ -17,7 +17,7 @@ if __package__ in {None, ""}:
 from src.config_loader import load_config
 from src.feishu_uploader import FeishuUploader
 from src.llm_analyzer import LLMAnalyzer
-from src.news_loader import load_transcript
+from src.news_loader import load_transcript, resolve_transcript_path
 
 
 BEIJING_TZ = ZoneInfo("Asia/Shanghai")
@@ -40,13 +40,14 @@ def main() -> None:
     args = parser.parse_args()
 
     target_date = _resolve_target_date(args.date)
-    input_json_path = Path(args.input_json or f"news/{target_date}.json")
+    preferred_input_path = Path(args.input_json or f"news/{target_date}.json")
+    input_path = resolve_transcript_path(preferred_input_path)
 
     print("📋 Loading configuration...")
     config = load_config(args.config)
 
-    print(f"📰 Loading transcript: {input_json_path}")
-    transcript = load_transcript(input_json_path)
+    print(f"📰 Loading transcript: {input_path}")
+    transcript = load_transcript(input_path)
     print(f"   Date: {transcript.date}")
     print(f"   Items: {len(transcript.items)}")
 
