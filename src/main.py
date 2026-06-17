@@ -18,6 +18,7 @@ from src.config_loader import load_config
 from src.feishu_uploader import FeishuUploader
 from src.llm_analyzer import LLMAnalyzer
 from src.news_loader import load_transcript, resolve_transcript_path
+import yaml
 
 
 BEIJING_TZ = ZoneInfo("Asia/Shanghai")
@@ -50,6 +51,8 @@ def main() -> None:
     transcript = load_transcript(input_path)
     print(f"   Date: {transcript.date}")
     print(f"   Items: {len(transcript.items)}")
+    source_name = _resolve_source_name(config)
+    print(f"   Source: {source_name}")
 
     print("🤖 Generating analysis markdown...")
     analyzer = LLMAnalyzer(config)
@@ -57,7 +60,7 @@ def main() -> None:
     analysis_markdown = _normalize_document(analyzer.analyze(transcript), document_title)
 
     if config["output"].get("save_analysis", True):
-        save_paths = _save_analysis(config, target_date, analysis_markdown)
+        save_paths = _save_analysis(config, target_date, analysis_markdown, source_name=source_name)
         for path in save_paths:
             print(f"   Saved: {path}")
 
@@ -72,7 +75,7 @@ def main() -> None:
 
     print("📤 Uploading to Feishu...")
     uploader = FeishuUploader(config)
-    uploaded_url = uploader.upload(document_title, analysis_markdown)
+    uploaded_url = uploader.upload(document_title, analysis_markdown, source_name=source_name)
     print(f"✅ Uploaded: {uploaded_url}")
 
 
@@ -103,7 +106,7 @@ def _normalize_document(markdown: str, title: str) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _save_analysis(config: dict, target_date: str, markdown: str) -> list[Path]:
+def _save_analysis(config: dict, target_date: str, markdown: str, source_name: str) -> list[Path]:
     """Save date-specific and latest analysis markdown files."""
     output_cfg = config["output"]
     analysis_dir = Path(output_cfg.get("analysis_dir", "analysis"))
@@ -111,16 +114,55 @@ def _save_analysis(config: dict, target_date: str, markdown: str) -> list[Path]:
 
     file_template = output_cfg.get("analysis_file_template", "{date}.md")
     dated_path = analysis_dir / file_template.format(date=target_date)
-    dated_path.write_text(markdown, encoding="utf-8")
+    rendered = _render_analysis_file(
+        title=f"《新闻联播》 - {target_date}",
+        source_name=source_name,
+        article_date=target_date,
+        body=markdown,
+    )
+    dated_path.write_text(rendered, encoding="utf-8")
 
     saved_paths = [dated_path]
     latest_path_text = output_cfg.get("latest_analysis_path")
     if latest_path_text:
         latest_path = Path(latest_path_text)
         latest_path.parent.mkdir(parents=True, exist_ok=True)
-        latest_path.write_text(markdown, encoding="utf-8")
+        latest_path.write_text(rendered, encoding="utf-8")
         saved_paths.append(latest_path)
     return saved_paths
+
+
+def _resolve_source_name(config: dict) -> str:
+    """Resolve the logical source name used for Feishu parent-node routing."""
+    explicit_source_name = (config.get("feishu", {}).get("source_name") or "").strip()
+    if explicit_source_name:
+        return explicit_source_name
+
+    source_parent_node_tokens = config.get("feishu", {}).get("source_parent_node_tokens", {})
+    if len(source_parent_node_tokens) == 1:
+        return next(iter(source_parent_node_tokens))
+
+    return "新闻联播"
+
+
+def _render_analysis_file(
+    title: str,
+    source_name: str,
+    article_date: str,
+    body: str,
+) -> str:
+    """Render analysis markdown with YAML front matter metadata."""
+    front_matter = {
+        "title": title,
+        "source_name": source_name,
+        "date": article_date,
+    }
+    return (
+        "---\n"
+        f"{yaml.safe_dump(front_matter, allow_unicode=True, sort_keys=False).strip()}\n"
+        "---\n\n"
+        f"{body.rstrip()}\n"
+    )
 
 
 if __name__ == "__main__":

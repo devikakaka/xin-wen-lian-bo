@@ -14,11 +14,12 @@ class FeishuUploader:
         self.client = FeishuClient(config)
         self.space_id = config["feishu"]["wiki_space_id"]
         self.parent_node_token = config["feishu"].get("parent_node_token", "")
+        self.source_parent_node_tokens = config["feishu"].get("source_parent_node_tokens", {})
         self.block_chunk_size = config["feishu"].get("block_chunk_size", 20)
 
-    def upload(self, title: str, markdown_content: str) -> str:
+    def upload(self, title: str, markdown_content: str, source_name: str | None = None) -> str:
         """Upload one markdown document to Feishu wiki."""
-        node = self._create_wiki_node(title)
+        node = self._create_wiki_node(title, source_name=source_name)
         node_token = node["node_token"]
         document_id = node["obj_token"]
 
@@ -29,14 +30,21 @@ class FeishuUploader:
         base = self.config["feishu"]["base_url"].replace("open.", "")
         return f"{base}/wiki/{node_token}"
 
-    def _create_wiki_node(self, title: str) -> dict:
+    def _resolve_parent_node_token(self, source_name: str | None = None) -> str:
+        """Pick the parent node token for a source, falling back to the default parent."""
+        if source_name and source_name in self.source_parent_node_tokens:
+            return self.source_parent_node_tokens[source_name]
+        return self.parent_node_token
+
+    def _create_wiki_node(self, title: str, source_name: str | None = None) -> dict:
         body = {
             "obj_type": "docx",
             "node_type": "origin",
             "title": title,
         }
-        if self.parent_node_token:
-            body["parent_node_token"] = self.parent_node_token
+        parent_node_token = self._resolve_parent_node_token(source_name)
+        if parent_node_token:
+            body["parent_node_token"] = parent_node_token
         data = self.client.request(
             "POST",
             f"/open-apis/wiki/v2/spaces/{self.space_id}/nodes",
