@@ -2,7 +2,7 @@ import fetch from './fetch.js';
 import jsdom from 'jsdom';
 const { JSDOM } = jsdom;
 import fs from 'fs';
-import path, { resolve } from 'path';
+import path from 'path';
 
 import { fileURLToPath } from "url";
 // const __filename = fileURLToPath(import.meta.url);
@@ -13,6 +13,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
  * @returns 当前日期, 格式如: 20220929
  */
 const getDate = () => {
+	const envDate = process.env.NEWS_DATE?.trim();
+	if (envDate) {
+		if (!/^\d{8}$/.test(envDate)) {
+			throw new Error('NEWS_DATE 必须为 YYYYMMDD 格式');
+		}
+		return envDate;
+	}
 	const add0 = num => num < 10 ? ('0' + num) : num;
 	const date = new Date();
 	return '' + date.getFullYear() + add0(date.getMonth() + 1) + add0(date.getDate());
@@ -23,6 +30,8 @@ const DATE = getDate();
 const NEWS_PATH = path.join(__dirname, 'news');
 // /news/xxxxxxxx.md 文件
 const NEWS_MD_PATH = path.join(NEWS_PATH, DATE + '.md');
+// /news/xxxxxxxx.json 文件
+const NEWS_JSON_PATH = path.join(NEWS_PATH, DATE + '.json');
 // /README.md 文件
 const README_PATH = path.join(__dirname, 'README.md');
 // /news/catalogue.json 文件
@@ -30,6 +39,7 @@ const CATALOGUE_JSON_PATH = path.join(NEWS_PATH, 'catalogue.json');
 // 打印调试信息
 console.log('DATE:', DATE);
 console.log('NEWS_PATH:', NEWS_PATH);
+console.log('NEWS_JSON_PATH:', NEWS_JSON_PATH);
 console.log('README_PATH:', README_PATH);
 console.log('CATALOGUE_JSON_PATH:', CATALOGUE_JSON_PATH);
 
@@ -61,6 +71,13 @@ const writeFile = (path, data) => {
 		});
 	});
 };
+
+/**
+ * 判断文件是否存在
+ * @param {String} filePath 文件路径
+ * @returns {Boolean}
+ */
+const fileExists = filePath => fs.existsSync(filePath);
 
 /**
  * 获取新闻列表
@@ -118,7 +135,7 @@ const getNews = async links => {
 		const dom = new JSDOM(html);
 		const title = dom.window.document.querySelector('#page_body > div.allcontent > div.video18847 > div.playingVideo > div.tit')?.innerHTML?.replace('[视频]', '');
 		const content = dom.window.document.querySelector('#content_area')?.innerHTML;
-		news.push({ title, content });
+		news.push({ title, content, url });
 		console.count('获取的新闻则数');
 	}
 	console.log('成功获取所有新闻');
@@ -136,7 +153,7 @@ const newsToMarkdown = ({ date, abstract, news, links }) => {
 	const newsLength = news.length;
 	for (let i = 0; i < newsLength; i++) {
 		const { title, content } = news[i];
-		const link = links[i];
+		const link = news[i].url || links[i];
 		mdNews += `### ${title}\n\n${content}\n\n[查看原文](${link})\n\n`;
 	}
 	return `# 《新闻联播》 (${date})\n\n## 新闻摘要\n\n${abstract}\n\n## 详细新闻\n\n${mdNews}\n\n---\n\n(更新时间戳: ${new Date().getTime()})\n\n`;
@@ -147,15 +164,17 @@ const saveTextToFile = async (savePath, text) => {
 	await writeFile(savePath, text);
 }
 
+const saveJsonToFile = async (savePath, data) => {
+	await writeFile(savePath, JSON.stringify(data, null, 2));
+}
+
 const updateCatalogue = async ({ catalogueJsonPath, readmeMdPath, date, abstract }) => {
 	// 更新 catalogue.json
 	await readFile(catalogueJsonPath).then(async data => {
 		data = data.toString();
 		let catalogueJson = JSON.parse(data || '[]');
-		catalogueJson.unshift({
-			date,
-			abstract,
-		});
+		catalogueJson = catalogueJson.filter(item => item.date !== date);
+		catalogueJson.unshift({ date, abstract });
 		let textJson = JSON.stringify(catalogueJson);
 		await writeFile(catalogueJsonPath, textJson);
 	});
@@ -163,26 +182,51 @@ const updateCatalogue = async ({ catalogueJsonPath, readmeMdPath, date, abstract
 	// 更新 README.md
 	await readFile(readmeMdPath).then(async data => {
 		data = data.toString();
+		if (data.includes(`- [${date}](./news/${date}.md)`)) {
+			console.log('README.md 已存在当天目录, 跳过插入');
+			return;
+		}
 		let text = data.replace('<!-- INSERT -->', `<!-- INSERT -->\n- [${date}](./news/${date}.md)`)
 		await writeFile(readmeMdPath, text);
 	});
 	console.log('更新 README.md 完成');
 }
 
-const newsList = await getNewsList(DATE);
-const abstract = await getAbstract(newsList.abstract);
-const news = await getNews(newsList.news);
-const md = newsToMarkdown({
-	date: DATE,
-	abstract,
-	news,
-	links: newsList.news
-});
-await saveTextToFile(NEWS_MD_PATH, md);
-await updateCatalogue({ 
-	catalogueJsonPath: CATALOGUE_JSON_PATH,
-	readmeMdPath: README_PATH,
-	date: DATE,
-	abstract: abstract
-});
-console.log('全部成功, 程序结束');
+const main = async () => {
+	const newsList = await getNewsList(DATE);
+	const abstract = await getAbstract(newsList.abstract);
+	const news = await getNews(newsList.news);
+	const md = newsToMarkdown({
+		date: DATE,
+		abstract,
+		news,
+		links: newsList.news
+	});
+	const structuredNews = {
+		date: DATE,
+		abstract,
+		items: news.map(item => ({
+			title: item.title,
+			content: item.content,
+			url: item.url,
+		})),
+		updatedAt: new Date().toISOString(),
+	};
+
+	await saveTextToFile(NEWS_MD_PATH, md);
+	await saveJsonToFile(NEWS_JSON_PATH, structuredNews);
+
+	if (!fileExists(CATALOGUE_JSON_PATH)) {
+		await saveJsonToFile(CATALOGUE_JSON_PATH, []);
+	}
+
+	await updateCatalogue({
+		catalogueJsonPath: CATALOGUE_JSON_PATH,
+		readmeMdPath: README_PATH,
+		date: DATE,
+		abstract: abstract
+	});
+	console.log('全部成功, 程序结束');
+}
+
+await main();

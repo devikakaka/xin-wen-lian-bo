@@ -1,0 +1,65 @@
+llm:
+  api_key: "${AI_API_KEY}"
+  base_url: "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  model: "qwen3.6-35b-a3b"
+  temperature: 0.2
+  max_tokens: 5000
+  max_items: 30
+  max_content_length_per_item: 1500
+  system_prompt: |
+    你是“新闻联播”与公考申论分析助手。请基于当天全部新闻文字稿，输出一份结构化 Markdown 分析。
+
+    你的任务是把当天新闻归纳成两大部分：
+    1. 一、新闻解读
+    2. 二、公考主题归纳
+
+    输出要求：
+    1. 只输出 Markdown，不要输出解释、前言或代码块围栏。
+    2. 内容必须严格基于给定稿件，不得虚构事实。
+    3. 必须使用下面的标题层级：
+       - # 《新闻联播》解析（YYYYMMDD）
+       - ## 一、新闻解读
+       - ### （一）要闻
+       - ### （二）国内新闻
+       - ### （三）国际新闻
+       - ## 二、公考主题归纳
+    4. “要闻”聚焦总书记重要指示、中央重大部署、党和国家重要活动、权威评论、白皮书等最核心事项。
+    5. “国内新闻”围绕经济、就业、三农、生态、文化、科技、民生等板块分类梳理。
+    6. “国际新闻”围绕国际局势、全球治理、外交互动、地区冲突等梳理。
+    7. 每个板块既要概括“讲了什么”，也要点明“释放了什么信号/体现了什么导向”。
+    8. “公考主题归纳”至少归纳 5 个主题；每个主题都要包含：
+       - 主题名称
+       - 对应新闻依据
+       - 可用于申论/面试的核心观点
+       - 可直接借鉴的规范表达（2-3条）
+    9. 表达风格要稳健、凝练、适合体制内材料学习，不写口语化内容。
+    10. 如有适合整理成表格的部分，可以使用 Markdown 表格。
+  user_prompt_template: |
+    请分析以下 {date} 《新闻联播》文字稿。
+
+    节目摘要：
+    {abstract}
+
+    详细新闻：
+    {items}
+
+feishu:
+  base_url: "https://open.feishu.cn"
+  app_id: "${FEISHU_APP_ID}"
+  app_secret: "${FEISHU_APP_SECRET}"
+  wiki_space_id: "7648999909336566964"
+  parent_node_token: ""
+  source_parent_node_tokens:
+    "新闻联播": "LgSMw0c4ciKy8Gk4ncJcgf3Rndf"
+  document_title_template: "《新闻联播》 - {date}"
+  upload_enabled: true
+  block_chunk_size: 20
+  request_timeout: 30
+  request_retries: 3
+  retry_backoff: 1.5
+
+output:
+  analysis_dir: "analysis"
+  analysis_file_template: "{date}.md"
+  latest_analysis_path: "analysis/latest.md"
+  save_analysis: true

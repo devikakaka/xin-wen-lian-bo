@@ -2,6 +2,10 @@ name: Update today xin wen lian bo
 
 on:
   workflow_dispatch:
+    inputs:
+      date:
+        description: 'Optional target date in YYYYMMDD format'
+        required: false
   schedule:
     # 东八区 (UTC+8), 所以要-8小时
     - cron: '30 12 * * *'
@@ -15,12 +19,27 @@ jobs:
       - uses: actions/setup-node@v3
         with:
           node-version: 16
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
       - run: npm install
+      - run: python -m pip install --upgrade pip
+      - run: pip install -r requirements.txt
+      - run: cp config/config.example.yaml config/config.yaml
       - run: npm run index
+        env:
+          NEWS_DATE: ${{ github.event.inputs.date || '' }}
+      - run: python -m src.main
+        env:
+          NEWS_DATE: ${{ github.event.inputs.date || '' }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          FEISHU_APP_ID: ${{ secrets.FEISHU_APP_ID }}
+          FEISHU_APP_SECRET: ${{ secrets.FEISHU_APP_SECRET }}
+          FEISHU_WIKI_SPACE_ID: ${{ secrets.FEISHU_WIKI_SPACE_ID }}
       - run: git config --local user.email "github-actions[bot]@github.com"
       - run: git config --local user.name "github-actions[bot]"
       - run: git add .
-      - run: git commit -m "AUTO UPDATE [bot]"
+      - run: git diff --cached --quiet || git commit -m "AUTO UPDATE [bot]"
       - name: Push master changes
         uses: ad-m/github-push-action@master
         with:

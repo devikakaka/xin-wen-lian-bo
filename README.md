@@ -2,7 +2,39 @@
 
 爬取自 [cctv央视网](https://tv.cctv.com/), 包准确!
 
-程序开发指南: [DEVELOP.md](./DEVELOP.md)
+每次 GitHub Actions workflow 执行时，现在会自动完成这条链路：
+
+1. 抓取当天《新闻联播》文字稿
+2. 落盘 Markdown 和结构化 JSON
+3. 调用 AI 生成“新闻解读 + 公考主题归纳”分析稿
+4. 保存分析 Markdown 到 `analysis/`
+5. 上传分析结果到飞书知识库
+
+## 分析与飞书配置
+
+首次使用前需要：
+
+```bash
+cp config/config.example.yaml config/config.yaml
+pip install -r requirements.txt
+```
+
+需要手动修改config中的 wiki_space_id 和 source_parent_node_tokens
+
+需要提供这些环境变量：
+
+- `AI_API_KEY`
+- `FEISHU_APP_ID`
+- `FEISHU_APP_SECRET`
+
+
+本地手动运行：
+
+```bash
+npm run index
+python -m src.main
+```
+
 
 ## 文字稿目录: 
 
@@ -24,4 +56,3 @@
 - [20260603](./news/20260603.md)
 - [20260602](./news/20260602.md)
 - [20260601](./news/20260601.md)
-
