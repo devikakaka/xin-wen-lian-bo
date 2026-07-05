@@ -79,6 +79,10 @@ const writeFile = (path, data) => {
  */
 const fileExists = filePath => fs.existsSync(filePath);
 
+const normalizeText = text => text?.replace(/\s+/g, ' ').trim() || '';
+
+const getDatePath = date => `${String(date).slice(0, 4)}/${String(date).slice(4, 6)}/${String(date).slice(6, 8)}`;
+
 /**
  * 获取新闻列表
  * @param {String|Number} date 当前日期
@@ -89,18 +93,23 @@ const getNewsList = async date => {
 	const fullHTML = `<!DOCTYPE html><html><head></head><body>${HTML}</body></html>`;
 	const dom = new JSDOM(fullHTML);
 	const nodes = dom.window.document.querySelectorAll('a');
-	var links = [];
+	const datePath = getDatePath(date);
+	var videoLinks = [];
 	nodes.forEach(node => {
 		// 从dom节点获得href中的链接
 		let link = node.href;
+		if (!link || !link.includes('tv.cctv.com') || !link.includes(datePath) || !link.endsWith('.shtml')) return;
 		// 如果已经有了就不再添加 (去重)
-		if (!links.includes(link)) links.push(link);
+		if (!videoLinks.includes(link)) videoLinks.push(link);
 	});
-	const abstract = links.shift();
+	const abstract = videoLinks.shift();
+	if (!abstract || videoLinks.length === 0) {
+		throw new Error(`未能从新闻列表页提取有效链接: ${date}`);
+	}
 	console.log('成功获取新闻列表');
 	return {
 		abstract,
-		news: links
+		news: videoLinks
 	}
 }
 
@@ -112,9 +121,20 @@ const getNewsList = async date => {
 const getAbstract = async link => {
 	const HTML = await fetch(link);
 	const dom = new JSDOM(HTML);
-	const abstract = dom.window.document.querySelector(
-		'#page_body > div.allcontent > div.video18847 > div.playingCon > div.nrjianjie_shadow > div > ul > li:nth-child(1) > p'
-	).innerHTML.replaceAll('；', "；\n\n").replaceAll('：', "：\n\n");
+	const selectors = [
+		'#page_body > div.allcontent > div.video18847 > div.playingCon > div.nrjianjie_shadow > div > ul > li:nth-child(1) > p',
+		'.nrjianjie_shadow p',
+		'.nrjianjie p',
+		'#content_area p',
+		'#content_area'
+	];
+	const abstractNode = selectors
+		.map(selector => dom.window.document.querySelector(selector))
+		.find(node => normalizeText(node?.textContent));
+	if (!abstractNode) {
+		throw new Error(`未找到新闻简介节点: ${link}`);
+	}
+	const abstract = abstractNode.innerHTML.replaceAll('；', "；\n\n").replaceAll('：', "：\n\n");
 	console.log('成功获取新闻简介');
 	return abstract;
 }
