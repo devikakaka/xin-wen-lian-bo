@@ -7,8 +7,8 @@ on:
         description: 'Optional target date in YYYYMMDD format'
         required: false
   schedule:
-    # 东八区 (UTC+8), 所以要-8小时
-    - cron: '30 09 * * *'
+    - cron: '0 20 * * *'
+      timezone: "Asia/Shanghai"
 
 jobs:
   update:
