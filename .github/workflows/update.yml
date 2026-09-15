@@ -7,8 +7,7 @@ on:
         description: 'Optional target date in YYYYMMDD format'
         required: false
   schedule:
-    - cron: '0 20 * * *'
-      timezone: "Asia/Shanghai"
+    - cron: '0 13 * * *'
 
 jobs:
   update:
